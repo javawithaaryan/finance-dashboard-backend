@@ -1,62 +1,51 @@
 const router = require('express').Router();
-const pool = require('../db');
+const db = require('../db');
 const auth = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
-const validate = [
-  body('amount').isNumeric(),
-  body('type').isIn(['income', 'expense']),
-  body('category').notEmpty(),
-  body('date').isDate()
-];
-
-// All roles can view
-router.get('/', auth(['viewer', 'analyst', 'admin']), async (req, res) => {
+router.get('/', auth(['viewer','analyst','admin']), (req, res) => {
   const { type, category, from, to, page = 1, limit = 10 } = req.query;
-  const conditions = ['is_deleted = false'];
+  let query = 'SELECT * FROM records WHERE is_deleted=0';
   const params = [];
-  let i = 1;
 
-  if (type) { conditions.push(`type = $${i++}`); params.push(type); }
-  if (category) { conditions.push(`category ILIKE $${i++}`); params.push(`%${category}%`); }
-  if (from) { conditions.push(`date >= $${i++}`); params.push(from); }
-  if (to) { conditions.push(`date <= $${i++}`); params.push(to); }
+  if (type) { query += ' AND type=?'; params.push(type); }
+  if (category) { query += ' AND category LIKE ?'; params.push(`%${category}%`); }
+  if (from) { query += ' AND date>=?'; params.push(from); }
+  if (to) { query += ' AND date<=?'; params.push(to); }
 
-  const offset = (page - 1) * limit;
-  params.push(limit, offset);
+  query += ' ORDER BY date DESC LIMIT ? OFFSET ?';
+  params.push(parseInt(limit), (parseInt(page)-1)*parseInt(limit));
 
-  const query = `SELECT * FROM records WHERE ${conditions.join(' AND ')} ORDER BY date DESC LIMIT $${i++} OFFSET $${i}`;
-  const result = await pool.query(query, params);
-  res.json(result.rows);
+  res.json(db.prepare(query).all(...params));
 });
 
-// Admin only: create
-router.post('/', auth(['admin']), validate, async (req, res) => {
+router.post('/', auth(['admin']), [
+  body('amount').isNumeric(),
+  body('type').isIn(['income','expense']),
+  body('category').notEmpty(),
+  body('date').notEmpty()
+], (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { amount, type, category, date, notes } = req.body;
-  const result = await pool.query(
-    'INSERT INTO records (amount, type, category, date, notes, created_by) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-    [amount, type, category, date, notes, req.user.id]
-  );
-  res.status(201).json(result.rows[0]);
+  const result = db.prepare(
+    'INSERT INTO records (amount, type, category, date, notes, created_by) VALUES (?,?,?,?,?,?)'
+  ).run(amount, type, category, date, notes, req.user.id);
+  res.status(201).json({ id: result.lastInsertRowid, amount, type, category, date, notes });
 });
 
-// Admin only: update
-router.put('/:id', auth(['admin']), async (req, res) => {
+router.put('/:id', auth(['admin']), (req, res) => {
   const { amount, type, category, date, notes } = req.body;
-  const result = await pool.query(
-    'UPDATE records SET amount=$1, type=$2, category=$3, date=$4, notes=$5 WHERE id=$6 AND is_deleted=false RETURNING *',
-    [amount, type, category, date, notes, req.params.id]
-  );
-  if (!result.rows.length) return res.status(404).json({ error: 'Record not found' });
-  res.json(result.rows[0]);
+  const result = db.prepare(
+    'UPDATE records SET amount=?, type=?, category=?, date=?, notes=? WHERE id=? AND is_deleted=0'
+  ).run(amount, type, category, date, notes, req.params.id);
+  if (!result.changes) return res.status(404).json({ error: 'Record not found' });
+  res.json({ message: 'Record updated' });
 });
 
-// Admin only: soft delete
-router.delete('/:id', auth(['admin']), async (req, res) => {
-  await pool.query('UPDATE records SET is_deleted=true WHERE id=$1', [req.params.id]);
+router.delete('/:id', auth(['admin']), (req, res) => {
+  db.prepare('UPDATE records SET is_deleted=1 WHERE id=?').run(req.params.id);
   res.json({ message: 'Record deleted' });
 });
 

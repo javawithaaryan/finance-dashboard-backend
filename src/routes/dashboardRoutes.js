@@ -1,35 +1,34 @@
 const router = require('express').Router();
-const pool = require('../db');
+const db = require('../db');
 const auth = require('../middleware/auth');
 
-router.get('/summary', auth(['viewer', 'analyst', 'admin']), async (req, res) => {
-  const totals = await pool.query(`
-    SELECT type, SUM(amount) as total FROM records WHERE is_deleted=false GROUP BY type
-  `);
-  const income = totals.rows.find((r) => r.type === 'income')?.total || 0;
-  const expense = totals.rows.find((r) => r.type === 'expense')?.total || 0;
+router.get('/summary', auth(['viewer','analyst','admin']), (req, res) => {
+  const totals = db.prepare(
+    'SELECT type, SUM(amount) as total FROM records WHERE is_deleted=0 GROUP BY type'
+  ).all();
+  const income = totals.find((r) => r.type==='income')?.total || 0;
+  const expense = totals.find((r) => r.type==='expense')?.total || 0;
 
-  const categories = await pool.query(`
-    SELECT category, type, SUM(amount) as total FROM records WHERE is_deleted=false GROUP BY category, type ORDER BY total DESC
-  `);
+  const categories = db.prepare(
+    'SELECT category, type, SUM(amount) as total FROM records WHERE is_deleted=0 GROUP BY category, type'
+  ).all();
 
-  const recent = await pool.query(`
-    SELECT * FROM records WHERE is_deleted=false ORDER BY created_at DESC LIMIT 5
-  `);
+  const recent = db.prepare(
+    'SELECT * FROM records WHERE is_deleted=0 ORDER BY created_at DESC LIMIT 5'
+  ).all();
 
-  const trends = await pool.query(`
-    SELECT TO_CHAR(date, 'YYYY-MM') as month, type, SUM(amount) as total
-    FROM records WHERE is_deleted=false
-    GROUP BY month, type ORDER BY month DESC LIMIT 12
-  `);
+  const trends = db.prepare(
+    `SELECT strftime('%Y-%m', date) as month, type, SUM(amount) as total
+     FROM records WHERE is_deleted=0 GROUP BY month, type ORDER BY month DESC LIMIT 12`
+  ).all();
 
   res.json({
-    total_income: parseFloat(income),
-    total_expense: parseFloat(expense),
-    net_balance: parseFloat(income) - parseFloat(expense),
-    category_breakdown: categories.rows,
-    recent_transactions: recent.rows,
-    monthly_trends: trends.rows
+    total_income: income,
+    total_expense: expense,
+    net_balance: income - expense,
+    category_breakdown: categories,
+    recent_transactions: recent,
+    monthly_trends: trends
   });
 });
 
