@@ -1,0 +1,52 @@
+# Finance Dashboard Backend
+
+A RESTful backend for a finance dashboard with role-based access control.
+
+## Stack
+- Node.js + Express
+- PostgreSQL
+- JWT Authentication
+- express-validator
+
+## Setup
+
+1. Clone and install:
+   npm install
+
+2. Create PostgreSQL DB and run schema.sql
+
+3. Copy .env and fill in values
+
+4. Start: node src/app.js
+
+## Roles
+| Role | Permissions |
+|------|-------------|
+| viewer | View records & dashboard |
+| analyst | View records & dashboard |
+| admin | Full CRUD + manage users |
+
+## API Endpoints
+
+### Auth
+- POST /api/auth/register
+- POST /api/auth/login
+
+### Users (Admin only)
+- GET /api/users
+- PATCH /api/users/:id/role
+- PATCH /api/users/:id/status
+
+### Records
+- GET /api/records?type=&category=&from=&to=&page=&limit=
+- POST /api/records (admin)
+- PUT /api/records/:id (admin)
+- DELETE /api/records/:id (admin, soft delete)
+
+### Dashboard (all roles)
+- GET /api/dashboard/summary
+
+## Assumptions
+- Soft delete used for records (is_deleted flag)
+- Analyst and Viewer have same read permissions
+- JWT stored client-side, sent as Bearer token
