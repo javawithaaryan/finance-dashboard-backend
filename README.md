@@ -4,7 +4,7 @@ A RESTful backend for a finance dashboard with role-based access control.
 
 ## Stack
 - Node.js + Express
-- PostgreSQL
+- SQLite (`better-sqlite3`)
 - JWT Authentication
 - express-validator
 
@@ -13,11 +13,16 @@ A RESTful backend for a finance dashboard with role-based access control.
 1. Clone and install:
    npm install
 
-2. Create PostgreSQL DB and run schema.sql
+2. Configure `.env`:
+   JWT_SECRET=supersecretkey123
+   PORT=3000
 
-3. Copy .env and fill in values
+3. Start:
+   node src/app.js
 
-4. Start: node src/app.js
+4. Database notes:
+   - SQLite DB file (`finance.db`) is created automatically at runtime.
+   - Tables are auto-created from `src/db.js` on startup.
 
 ## Roles
 | Role | Permissions |
